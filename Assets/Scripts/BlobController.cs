@@ -4,67 +4,95 @@ using System.Collections;
 using Assets.Scripts;
 using UnityEngine;
 
-[RequireComponent(typeof(CharacterController))]
-public class BlobController : MonoBehaviour
-{
+public class BlobController : MonoBehaviour, IEdible {
+
+    public static int FOOD_ENERGY_MULTIPLIER = 20;
+
 
     [SerializeField]
-    private BlobModel _blobModel;
+    public BlobModel BlobModel;
 
-    public Vector3 _target;
+    public Vector3 Target;
+    public Quaternion TargetRotation;
 
-    public CharacterController CharacterController { get; private set; }
+    public Terrain Terrain;
+
+
+    //public CharacterController CharacterController { get; private set; }
+    public Rigidbody RigidBody;
+
+    public Collider Collider;
 
     public float Energy {
-        get {return _blobModel.Energy;}
-        set {_blobModel.Energy = value;}
+        get { return BlobModel.Energy; }
+        set { BlobModel.Energy = value; }
     }
 
     public Renderer Renderer;
 
     public bool IsAlive {
-        get { return _blobModel.IsAlive; }
-        set { _blobModel.IsAlive = value; }
+        get { return BlobModel.IsAlive; }
+        set { BlobModel.IsAlive = value; }
     }
+    public float MovementSpeed {
+        get { return BlobModel.MovementSpeed; }
+        set { BlobModel.MovementSpeed = value; }
+    }
+    public float Size {
+        get { return BlobModel.Size; }
+        set { BlobModel.Size = value; }
+    }
+    public float SensorRange {
+        get { return BlobModel.SensorRadius; }
+        set { BlobModel.SensorRadius = value; }
+    }
+    public int Age {
+        get { return BlobModel.Age; }
+        set { BlobModel.Age = value; }
+    }
+
+
 
     //private float _targetRotation = 0;
-    private Quaternion _targetRotation;
     private Action _onDeath;
     private Action<BlobModel, Vector3> _onReplicate;
-    private Action<FoodController> _onEat;
-    
+    private Action<IEdible> _onEat;
+
+    float _lastHeight;
+
+
     private void Awake() {
-        CharacterController = GetComponent<CharacterController>();
-        Renderer = GetComponent<Renderer>();
+          
     }
 
-    public void Initialize(BlobModel blobModel, WorldModel worldModel, Action onDeath, Action<BlobModel, Vector3> onReplicate, Action<FoodController> onEat) {
+    public void Initialize(Vector3 startingPosition, BlobModel blobModel, WorldModel worldModel, Action onDeath, Action<BlobModel, Vector3> onReplicate, Action<IEdible> onEat) {
 
         //transform.localScale = Vector3.zero;
 
-        _blobModel = blobModel;
+        _lastHeight = startingPosition.y;
+
+        BlobModel = blobModel;
         _onDeath = onDeath;
         _onReplicate = onReplicate;
         _onEat = onEat;
 
-        gameObject.name = $"Blob #{_blobModel.Id}";
+        gameObject.name = $"Blob #{BlobModel.Id}";
 
-        Renderer.material.color = _blobModel.Color;
+        Renderer.material.color = BlobModel.Color;
 
-        transform.Translate(0, 0.5f + CharacterController.height * 0.5f,0);
+        transform.Translate(0, 0.5f + blobModel.Size * 0.5f, 0);
 
         StartCoroutine(ChangeTargetRotation());
         StartCoroutine(SensorRoutine());
 
-        StartCoroutine(ScaleAnimationRoutine(Vector3.zero, new Vector3(_blobModel.Size, _blobModel.Size, _blobModel.Size), null));
+        StartCoroutine(ScaleAnimationRoutine(Vector3.zero, new Vector3(BlobModel.Size, BlobModel.Size, BlobModel.Size), null));
 
     }
 
-   
+
 
     // Update is called once per frame
-    void Update()
-    {
+    void Update() {
 
 
     }
@@ -83,7 +111,7 @@ public class BlobController : MonoBehaviour
         if (!IsAlive)
             return;
 
-        Gizmos.DrawWireSphere(transform.position, _blobModel.SensorRadius);
+        Gizmos.DrawWireSphere(transform.position, BlobModel.AdjustedRadius);
     }
 
     public void FixedUpdate() {
@@ -93,13 +121,49 @@ public class BlobController : MonoBehaviour
 
         UpdateRotation();
         UpdateMovement();
-        
+
     }
 
+    
     private void UpdateMovement() {
 
+        var height = Terrain.SampleHeight(transform.position);
+        var movement = transform.forward * BlobModel.MovementSpeed * Time.deltaTime;
+
+        
+        if (height > _lastHeight) {
+            movement *= 0.8f;
+        } else {
+            movement *= 1.5f;
+        }
+        
+
+        var newPosition = transform.position + movement;
+        newPosition.y = height + Size / 2;
+
+        transform.position = newPosition;
+
+        _lastHeight = height;
+                
+
         // Blob is always moving forward
-        CharacterController.Move(transform.forward * _blobModel.MovementSpeed * Time.fixedDeltaTime);
+
+        //var move = transform.forward * BlobModel.MovementSpeed * Time.deltaTime + transform.position;
+
+       
+
+        // if (CharacterController.isGrounded) {
+        //move.y = -gravity;
+        //}
+
+        //move.y = CharacterController.isGrounded ? 0 : -gravity;
+
+        //CharacterController.Move(move * Time.fixedDeltaTime);
+
+        //CharacterController.Move(transform.forward * BlobModel.MovementSpeed * Time.fixedDeltaTime);
+        //CharacterController.SimpleMove(transform.forward * BlobModel.MovementSpeed * Time.fixedDeltaTime * 50);
+        //RigidBody.velocity = move;
+        //RigidBody.AddForce(move, ForceMode.VelocityChange);
 
     }
 
@@ -107,7 +171,7 @@ public class BlobController : MonoBehaviour
 
 
         //transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.AngleAxis(_targetRotation, transform.up), _blobModel.RotationSpeed * Time.fixedDeltaTime);
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, _targetRotation, _blobModel.RotationSpeed * Time.fixedDeltaTime);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, TargetRotation, BlobModel.RotationSpeed * Time.fixedDeltaTime);
 
 
     }
@@ -116,17 +180,17 @@ public class BlobController : MonoBehaviour
     private IEnumerator ChangeTargetRotation() {
 
         var randomAngle = UnityEngine.Random.Range(0, 360f);
-        _targetRotation = Quaternion.AngleAxis(randomAngle, transform.up);
+        TargetRotation = Quaternion.AngleAxis(randomAngle, transform.up);
 
-        yield return new WaitForSeconds(_blobModel.TimeToChangeDirection);
+        yield return new WaitForSeconds(BlobModel.TimeToChangeDirection);
 
 
         while (IsAlive) {
 
-            randomAngle = UnityEngine.Random.Range(-_blobModel.ChangeDirectionRange, _blobModel.ChangeDirectionRange);
-            _targetRotation *= Quaternion.AngleAxis(randomAngle, transform.up);
+            randomAngle = UnityEngine.Random.Range(-BlobModel.ChangeDirectionRange, BlobModel.ChangeDirectionRange);
+            TargetRotation *= Quaternion.AngleAxis(randomAngle, transform.up);
 
-            yield return new WaitForSeconds(_blobModel.TimeToChangeDirection);
+            yield return new WaitForSeconds(BlobModel.TimeToChangeDirection);
         }
 
 
@@ -145,7 +209,7 @@ public class BlobController : MonoBehaviour
 
             //_target = new Vector3(UnityEngine.Random.Range(xSizeMin, xSizeMax), 0, UnityEngine.Random.Range(zSizeMin, zSizeMax));
 
-            yield return new WaitForSeconds(_blobModel.TimeToAcquireNewTarget);
+            yield return new WaitForSeconds(BlobModel.TimeToAcquireNewTarget);
 
         }
 
@@ -155,45 +219,46 @@ public class BlobController : MonoBehaviour
 
         while (IsAlive) {
 
-            var hitColliders = Physics.OverlapSphere(transform.position, _blobModel.SensorRadius + _blobModel.Size / 2, LayerMaskUtilities.IGNORE_LAYER);
+            var closest = FindClosestObject();
 
-            var closestObjectDistance = _blobModel.SensorRadius;
-            var closestPoint = Vector3.zero;
+            if (closest != null)
+                BlobDecider.DecideOnSensedClosestObject(this, closest);
 
-            foreach (var collider in hitColliders) {
-
-                if (collider.name == name || collider.tag == "Floor")
-                    continue;
-
-                var detectedPoint = collider.ClosestPointOnBounds(transform.position);
-
-                var distance = Vector3.Distance(transform.position, detectedPoint);
-
-
-                if (distance < closestObjectDistance) {
-                    closestPoint = detectedPoint;
-                    closestObjectDistance = distance;
-                }
-                
-            }
-
-            if (closestPoint != Vector3.zero) {
-
-                var adjustedPosition = new Vector3(closestPoint.x, transform.position.y, closestPoint.z);
-
-                var oppositeDirection = Vector3.Normalize(transform.position - adjustedPosition);
-
-                if (oppositeDirection != Vector3.zero)
-                    _targetRotation = Quaternion.LookRotation(oppositeDirection);
-
-            }
-
-            yield return new WaitForSeconds(_blobModel.TimeToFireSensor);
+            yield return new WaitForSeconds(BlobModel.TimeToFireSensor);
 
         }
 
     }
 
+    public SensedObjectModel FindClosestObject() {
+
+        SensedObjectModel closestObject = null;
+
+        var hitColliders = Physics.OverlapSphere(transform.position, BlobModel.AdjustedRadius, LayerMaskUtilities.LayerMaskIgnore());
+
+        foreach (var collider in hitColliders) {
+
+            if (collider.name == name || collider.tag == "Floor")
+                continue;
+
+            var sensedObject = SensedObjectModel.Build(transform.position, collider);
+
+            if (closestObject == null) {
+                closestObject = sensedObject;
+                continue;
+            }
+
+            if (sensedObject.Distance < closestObject.Distance) {
+                closestObject = sensedObject;
+            }
+
+        }
+
+        return closestObject;
+
+    }
+
+ 
     public void Tick() {
 
         TickEnergy();
@@ -205,7 +270,7 @@ public class BlobController : MonoBehaviour
         if (!IsAlive)
             return;
 
-        _blobModel.Energy -= (Mathf.Pow(_blobModel.Size, 3) + Mathf.Pow(_blobModel.MovementSpeed, 2) + _blobModel.SensorRadius);
+        BlobModel.Energy -= (Mathf.Pow(BlobModel.Size, 3) + Mathf.Pow(BlobModel.MovementSpeed, 2) + BlobModel.SensorRadius);
 
     }
 
@@ -213,7 +278,9 @@ public class BlobController : MonoBehaviour
         if (!IsAlive)
             return;
 
-        if (_blobModel.Energy <= 0){// || UnityEngine.Random.Range(0, 1f) < _blobModel.DyingChance) {
+        BlobModel.Age++;
+
+        if (BlobModel.Energy <= 0 || UnityEngine.Random.Range(0, 1f) < BlobModel.DyingChance * BlobModel.Age) {
 
             SetDead();
         }
@@ -223,11 +290,11 @@ public class BlobController : MonoBehaviour
         if (!IsAlive)
             return;
 
-        if (_blobModel.Energy >= BlobModel.REPLICATION_ENERGY_MINIMUM) {
+        if (BlobModel.Energy >= BlobModel.REPLICATION_ENERGY_MINIMUM) {
 
-            _onReplicate(Factory.CopyBlobModel(_blobModel), transform.position);
+            _onReplicate(BlobFactory.MutateBlobModel(BlobModel), transform.position);
 
-            _blobModel.Energy -= BlobModel.REPLICATION_ENERGY_COST;
+            BlobModel.Energy -= BlobModel.REPLICATION_ENERGY_COST;
 
         }
     }
@@ -251,10 +318,61 @@ public class BlobController : MonoBehaviour
 
     }
 
-    public void OnTriggerEnter(Collider other) {
-        
+    public void MouthCollision(Collider other) {
+
         if (other.tag == "Food") {
             _onEat(other.GetComponent<FoodController>());
+            return;
+        }
+
+        if (other.tag == "Blob") {
+
+            var otherBlob = other.GetComponent<BlobController>();
+
+            if (CanEat(otherBlob)) {
+
+                //Debug.Log($"{name} has eaten {otherBlob.name}");
+
+                _onEat(other.GetComponent<BlobController>());
+            }
+        }
+
+    }
+
+    public void SetEaten() {
+        SetDead();
+    }
+
+    public float GetEnergyValue() {
+        return Size * FOOD_ENERGY_MULTIPLIER;
+    }
+
+    public bool CanEat(BlobController other) {
+        return (Size * BlobModel.SIZE_DIFFERENCE_TO_EAT > other.Size );
+    }
+
+    public void MoveTowards(Vector3 point) {
+        var rotation = RotationHelper.GetTowardsLookRotation(transform.position, point);
+
+        if (rotation == null)
+            return;
+
+        TargetRotation = (Quaternion)rotation;
+    }
+
+    public void RunAwayFrom(Vector3 point) {
+        var rotation = RotationHelper.GetOppositeLookRotation(transform.position, point);
+
+        if (rotation == null)
+            return;
+
+        TargetRotation = (Quaternion)rotation;
+    }
+
+
+    private void OnTriggerEnter(Collider collider) {
+        if (collider.tag == "Wall") {
+            SetDead();
         }
 
     }

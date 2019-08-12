@@ -227,7 +227,7 @@ GameObject:
   - component: {fileID: 784747623565986670}
   - component: {fileID: 918635229428847963}
   m_Layer: 8
-  m_Name: BlobPrefab
+  m_Name: BlobPrefab(rb)
   m_TagString: Blob
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -302,7 +302,7 @@ CapsuleCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9098089197210151759}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 13400000, guid: 033b28d5170e25942bef430cf69c7815, type: 2}
   m_IsTrigger: 0
   m_Enabled: 1
   m_Radius: 0.5
@@ -357,5 +357,7 @@ MonoBehaviour:
     IsAlive: 1
   Target: {x: 0, y: 0, z: 0}
   TargetRotation: {x: 0, y: 0, z: 0, w: 0}
+  Terrain: {fileID: 0}
+  RigidBody: {fileID: 0}
   Collider: {fileID: 2762683654021510162}
   Renderer: {fileID: 7633716249706669891}

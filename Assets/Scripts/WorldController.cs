@@ -13,7 +13,16 @@ namespace Assets.Scripts {
         public GameObject BlobPrefab;
         public GameObject FoodPrefab;
 
-        public Text BlobCount;
+        public Terrain terrain;
+
+        public Text LeftText;
+        public Text RightText;
+        public Slider SpeedSlider;
+
+        public Button Speed1x;
+        public Button Speed5x;
+        public Button Speed10x;
+
 
         private WorldModel _worldModel;
         private List<BlobController> _blobs = new List<BlobController>();
@@ -32,7 +41,12 @@ namespace Assets.Scripts {
                 var x = UnityEngine.Random.Range(-_worldModel.Size.x / 2, _worldModel.Size.x / 2);
                 var z = UnityEngine.Random.Range(-_worldModel.Size.z / 2, _worldModel.Size.z / 2);
 
-                return new Vector3(x, 0, z);
+                var pos = new Vector3(x, 0, z);
+                pos.y = terrain.SampleHeight(pos);
+
+                var y = terrain.SampleHeight(new Vector3(x, 0, z));
+
+                return pos;
             }
         }
 
@@ -43,17 +57,60 @@ namespace Assets.Scripts {
             InitializeFoods();
 
             StartCoroutine(TickWorld());
+
+            Speed1x.onClick.AddListener(() => SetSpeedSlider(1));
+            Speed5x.onClick.AddListener(() => SetSpeedSlider(5));
+            Speed10x.onClick.AddListener(() => SetSpeedSlider(10));
+
         }
 
+        private void debuginst(float x, float z) {
+            var pos = new Vector3(x, 0, z);
+            pos.y = terrain.SampleHeight(pos);
+
+            DebugObjectFactory.Instance.InstantiateAt(pos);
+        }
+
+        private void SetSpeedSlider(float value) {
+            SpeedSlider.value = value;
+        }
        
 
-        private void Update() {
+        private void UpdateUI() {
 
-            BlobCount.text = $"Blob Count: {_blobs.Count.ToString()} \nFood Count: {_foods.Count.ToString()}";
+            LeftText.text = $"Blob Count: {_blobs.Count.ToString()}";
 
-            foreach (BlobController blob in AliveBlobs) {
-                BlobCount.text = String.Concat(BlobCount.text, "\n", blob.name, ": ", blob.Energy);
+            var foodCount = 0;
+            foreach (FoodController food in AliveFoods) {
+
+                foodCount++;
             }
+
+            LeftText.text += $"\nFood Count: {foodCount.ToString()}";
+
+            int totalAge = 0;
+            float totalSpeed = 0;
+            float totalSize = 0;
+            float totalSensor = 0;
+            
+            foreach (BlobController blob in AliveBlobs) {
+                LeftText.text = String.Concat(LeftText.text, "\n", blob.name, ": ", blob.Energy);
+
+                totalAge += blob.Age;
+                totalSpeed += blob.MovementSpeed;
+                totalSize += blob.Size;
+                totalSensor += blob.SensorRange;
+            }
+
+            var blobsCount = Mathf.Max(1, _blobs.Count);
+
+            RightText.text = $"Average Age: {totalAge / blobsCount}";
+            RightText.text += $"\nAverage Speed: {totalSpeed / blobsCount}";
+            RightText.text += $"\nAverage Size: {totalSize / blobsCount}";
+            RightText.text += $"\nAverage Sensor: {totalSensor / blobsCount}";
+
+            Time.timeScale = Mathf.Clamp(SpeedSlider.value, 0, 10);
+
         }
 
         private IEnumerator TickWorld() {
@@ -66,6 +123,8 @@ namespace Assets.Scripts {
                 RemoveDeadBlobs();
 
                 AddNewBlobs();
+
+                UpdateUI();
 
                 yield return new WaitForSeconds(_worldModel.TickTimer);
             }
@@ -99,13 +158,15 @@ namespace Assets.Scripts {
 
         private void InitializeWorld() {
             _worldModel = WorldFactory.MakeWorld();
+
+            TerrainFactory.GenerateHeights(terrain, 5, _worldModel.Ruggedness);
         }
 
         private void InitializeBlobs() {
 
             for (int i = 0; i < _worldModel.InitialBlobs; i++) {
 
-                var blobModel = Factory.MakeBlobModel();
+                var blobModel = BlobFactory.MakeBlobModel();
                 CreateBlob(blobModel, RandomWorldPosition);
             }
 
@@ -115,7 +176,7 @@ namespace Assets.Scripts {
 
             for (int i = 0; i < _worldModel.FoodCount; i++) {
 
-                _foods.Add(Factory.InstantiateFood(FoodPrefab, RandomWorldPosition, foodController => foodController.Activate(RandomWorldPosition), _worldModel.FoodRegenerationTime));
+                _foods.Add(FoodFactory.InstantiateFood(FoodPrefab, RandomWorldPosition, foodController => foodController.Activate(RandomWorldPosition), _worldModel.FoodRegenerationTicks));
 
             }
 
@@ -127,9 +188,9 @@ namespace Assets.Scripts {
             //_blobs.Remove(blob);
         }
 
-        private void EatFood(BlobController blob, FoodController food) {
+        private void EatFood(BlobController blob, IEdible food) {
 
-            blob.Energy += food.EnergyValue;
+            blob.Energy += food.GetEnergyValue();
 
             food.SetEaten();
             
@@ -137,7 +198,11 @@ namespace Assets.Scripts {
 
         private void CreateBlob(BlobModel blobModel, Vector3 position) {
 
-            _blobsToAdd.Add(Factory.InstantiateBlob(BlobPrefab, blobModel, _worldModel, position, RemoveBlob, CreateBlob, EatFood));
+            var blob = BlobFactory.InstantiateBlob(BlobPrefab, blobModel, _worldModel, position, RemoveBlob, CreateBlob, EatFood);
+            blob.Terrain = terrain;
+
+
+            _blobsToAdd.Add(blob);
         }
 
 

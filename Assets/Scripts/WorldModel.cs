@@ -10,7 +10,8 @@ namespace Assets.Scripts {
         public int InitialBlobs = 10;
         public Vector3 Size = new Vector3(28,0,28);
         public float TickTimer = 1f;
-        internal int FoodCount = 100;
-        internal int FoodRegenerationTime = 10;
+        public int FoodCount = 100;
+        public int FoodRegenerationTicks = 8;
+        public float Ruggedness = 0.05f;
     }
 }

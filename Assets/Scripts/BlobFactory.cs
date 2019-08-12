@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Assets.Scripts {
-    public class Factory {
+    public class BlobFactory {
 
         private static int _idCounter = 0;
 
@@ -36,36 +36,34 @@ namespace Assets.Scripts {
             };
         }
 
-        public static BlobController InstantiateBlob(
+        public static BlobModel MutateBlobModel(BlobModel parent) {
+
+            var child = MutationController.MutateFrom(parent);
+            child.Id = _idCounter++;
+            return child;
+        }
+
+
+            public static BlobController InstantiateBlob(
                 GameObject prefab, 
                 BlobModel blobModel, 
                 WorldModel worldModel, 
                 Vector3 position, 
                 Action<BlobController> onDeath, 
                 Action<BlobModel, Vector3> onReplicate,
-                Action<BlobController, FoodController> onEat) 
+                Action<BlobController, IEdible> onEat) 
             {
 
-            var blobGameObject = GameObject.Instantiate(prefab, new Vector3(position.x, 0, position.z), Quaternion.identity);
+            var blobGameObject = GameObject.Instantiate(prefab, position, Quaternion.identity);
 
             var blobController = blobGameObject.GetComponent<BlobController>();
             
-            blobController.Initialize(blobModel, worldModel, () => onDeath(blobController), onReplicate, foodController => onEat(blobController, foodController));
+            blobController.Initialize(position, blobModel, worldModel, () => onDeath(blobController), onReplicate, edible => onEat(blobController, edible));
 
             return blobController;
         }
 
-        public static FoodController InstantiateFood(GameObject foodPrefab, Vector3 position, Action<FoodController> onRegenerate, int regenerationTime) {
-
-            var foodGameObject = GameObject.Instantiate(foodPrefab, Vector3.zero, Quaternion.identity);
-
-            var foodController = foodGameObject.GetComponent<FoodController>();
-
-            foodController.Initialize(() => onRegenerate(foodController), regenerationTime);
-            foodController.Activate(position);
-
-            return foodController;
-
-        }
+        
     }
+
 }
